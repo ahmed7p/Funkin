@@ -41,6 +41,7 @@ import funkin.data.stage.StageRegistry;
 import funkin.graphics.FunkinCamera;
 import funkin.input.Cursor;
 import funkin.modding.events.ScriptEvent;
+import funkin.modding.events.ScriptEvent.PauseScriptEvent;
 import funkin.modding.events.ScriptEventDispatcher;
 import funkin.play.PlayState;
 import funkin.play.character.BaseCharacter;
@@ -141,7 +142,6 @@ class CameraEditorState extends UIState implements ConsoleClass
   public var currentNotes(get, never):Array<SongNoteData>;
   public var cameraRect:VirtualCameraRectangle = new VirtualCameraRectangle(0, 0);
   public var vCamDebug:FunkinSprite = null;
-
   var cachedEventIndex = 0;
   var cachedNoteIndex = 0;
 
@@ -747,9 +747,11 @@ class CameraEditorState extends UIState implements ConsoleClass
 
     if (currentStage != null)
     {
-      ScriptEventDispatcher.callEvent(currentStage, event);
-
-      currentStage.dispatchToCharacters(event);
+      if (event.type != UPDATE || !paused)
+      {
+        ScriptEventDispatcher.callEvent(currentStage, event);
+        currentStage.dispatchToCharacters(event);
+      }
     }
   }
 
@@ -833,12 +835,15 @@ class CameraEditorState extends UIState implements ConsoleClass
 
     if (currentStage != null)
     {
+      currentStage.active = !paused;
       currentStage.vcamPoint = cameraRect.vCamPoint;
       vCamDebug.x = cameraRect.vCamPoint.x;
       vCamDebug.y = cameraRect.vCamPoint.y;
     }
 
     conductorInUse.update();
+
+    if (FlxG.sound.music == null && !paused) pauseStage(); 
 
     // TODO: sync vocals if they desync, im just too lazy to put this in rn
     if (currentInstrumental != null && currentInstrumental.playing)
@@ -1460,6 +1465,8 @@ class CameraEditorState extends UIState implements ConsoleClass
     timeline.setStepLengthMs(conductorInUse.stepLengthMs);
   }
 
+  var paused:Bool = true;
+
   /**
    * Toggles playback of the current instrumental and vocal tracks.
    */
@@ -1467,9 +1474,16 @@ class CameraEditorState extends UIState implements ConsoleClass
   {
     if (currentInstrumental == null) return;
 
-    if (currentInstrumental.playing || forceStop) pauseAudioPlayback();
+    if (currentInstrumental.playing || forceStop)
+    {
+      pauseStage();
+      pauseAudioPlayback();
+    }
     else
+    {
+      resumeStage();
       playAudioPlayback();
+    }
 
     trace(currentInstrumental.playing ? 'Toggled playback ON' : 'Toggled playback OFF');
   }
@@ -1503,6 +1517,20 @@ class CameraEditorState extends UIState implements ConsoleClass
       vocal.pause();
     }
     timeline.isPlaying = false;
+  }
+
+  function pauseStage():Void
+  {
+    paused = true;
+    
+    dispatchEvent(new PauseScriptEvent(false));
+  }
+
+  function resumeStage():Void
+  {
+    paused = false;
+    
+    dispatchEvent(new ScriptEvent(RESUME));
   }
 
   var lastSeekReplay:Float = 0;
