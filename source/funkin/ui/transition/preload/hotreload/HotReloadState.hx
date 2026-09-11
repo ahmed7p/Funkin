@@ -21,6 +21,7 @@ import funkin.modding.module.ModuleHandler;
 import funkin.play.notes.notekind.NoteKindManager;
 import funkin.ui.title.TitleState;
 import funkin.util.tasks.TaskHandler;
+import funkin.util.ReflectUtil;
 import flixel.util.typeLimit.NextState;
 import lime.app.Future;
 import polymod.Polymod;
@@ -240,6 +241,7 @@ class HotReloadState extends MusicBeatState
     {
       ModuleHandler.clearModuleCache();
       Polymod.clearScripts();
+      ReflectUtil.clearScriptCache();
 
       funkin.modding.PolymodHandler.loadEnabledMods();
 
