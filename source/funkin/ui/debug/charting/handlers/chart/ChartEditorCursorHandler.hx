@@ -605,8 +605,47 @@ class ChartEditorCursorHandler
     }
     else if (state.dragTargetNote != null || state.dragTargetEvent != null)
     {
-      if (FlxG.mouse.justReleased)
+      if (FlxG.mouse.justReleased || (state.releasingControl() && state.gridGhostHoldNote?.noteData != null))
       {
+        if (state.gridGhostHoldNote != null)
+        {
+          state.gridGhostHoldNote.noteData = null;
+          state.gridGhostHoldNote.overrideData = null;
+          state.gridGhostHoldNote.setHeightDirectly(0);
+        }
+
+        if (state.pressingControl() && state.dragTargetNote != null && state.dragTargetNote.noteData != null)
+        {
+          var baseStepTime:Float = state.dragTargetNote.noteData.getStepTime();
+          var effectiveStepTime:Float = baseStepTime + state.dragTargetCurrentStep;
+          var dragLengthSteps:Float = Conductor.instance.getTimeInSteps(cursorSnappedMs) - effectiveStepTime;
+          var dragLengthMs:Float = Math.max(0, dragLengthSteps * Conductor.instance.stepLengthMs);
+
+          state.playSound(Paths.sound('ui/editors/chart-editor/charting-sounds/stretch-snap').toString());
+
+          if (state.dragTargetCurrentStep != 0 || state.dragTargetCurrentColumn != 0)
+          {
+            var moveMs:Float = Conductor.instance.getStepTimeInMs(effectiveStepTime) - state.dragTargetNote.noteData.time;
+            state.performCommand(new MoveNotesCommand([state.dragTargetNote.noteData], moveMs, state.dragTargetCurrentColumn));
+          }
+
+          if (dragLengthSteps > 0)
+          {
+            state.performCommand(new ExtendNoteLengthCommand(state.dragTargetNote.noteData, dragLengthMs));
+          }
+          else if (state.dragTargetNote.noteData.length > 0)
+          {
+            state.performCommand(new ExtendNoteLengthCommand(state.dragTargetNote.noteData, 0));
+          }
+
+          state.dragTargetNote = null;
+          state.dragTargetEvent = null;
+          state.noteDisplayDirty = true;
+          state.dragTargetCurrentStep = 0;
+          state.dragTargetCurrentColumn = 0;
+          return;
+        }
+
         // Perform the actual drag operation.
         var dragDistanceSteps:Float = state.dragTargetCurrentStep;
         var dragDistanceMs:Float = 0;
@@ -691,6 +730,73 @@ class ChartEditorCursorHandler
       }
       else
       {
+        if (state.pressingControl() && state.dragTargetNote != null && state.dragTargetNote.noteData != null)
+        {
+          targetCursorMode = Grabbing;
+          state.scrollMouseToGrid();
+
+          var baseStepTime:Float = state.dragTargetNote.noteData.getStepTime();
+          var effectiveStepTime:Float = baseStepTime + state.dragTargetCurrentStep;
+          var effectiveMs:Float = Conductor.instance.getStepTimeInMs(effectiveStepTime);
+
+          var cursorSteps:Float = Conductor.instance.getTimeInSteps(cursorSnappedMs);
+          var dragLengthSteps:Float = Math.max(0, cursorSteps - effectiveStepTime);
+          var dragLengthMs:Float = dragLengthSteps * Conductor.instance.stepLengthMs;
+          var dragLengthPixels:Float = ChartEditorTimeScale.lengthToPixels(effectiveMs, cursorSnappedMs - effectiveMs, dragLengthSteps);
+
+          if (state.dragLengthCurrent != dragLengthSteps)
+          {
+            state.playStretchySound();
+            state.dragLengthCurrent = dragLengthSteps;
+          }
+
+          if (state.gridGhostHoldNote != null)
+          {
+            if (dragLengthSteps > 0)
+            {
+              var sameHold:Bool = (state.gridGhostHoldNote.noteData == state.dragTargetNote.noteData);
+
+              state.gridGhostHoldNote.visible = true;
+              state.gridGhostHoldNote.noteData = state.dragTargetNote.noteData;
+
+              var targetColumn:Int = state.dragStartCursorColumn + state.dragTargetCurrentColumn;
+
+              var adjustedColumn:Int = targetColumn;
+              if (targetColumn >= ChartEditorState.STRUMLINE_SIZE)
+              {
+                adjustedColumn -= ChartEditorState.STRUMLINE_SIZE;
+              }
+              else
+              {
+                adjustedColumn += ChartEditorState.STRUMLINE_SIZE;
+              }
+              
+              state.gridGhostHoldNote.overrideData = adjustedColumn;
+              state.gridGhostHoldNote.noteDirection = targetColumn % 4;
+
+              state.gridGhostHoldNote.setHeightDirectly(dragLengthPixels, sameHold);
+              state.gridGhostHoldNote.noteStyle = NoteKindManager.getNoteStyleId(
+                state.dragTargetNote.noteData.kind,
+                state.currentSongNoteStyle
+              ) ?? state.currentSongNoteStyle;
+
+              state.gridGhostHoldNote.updateHoldNotePosition(state.renderedHoldNotes);
+              state.gridGhostHoldNote.y = state.gridTiledSprite.y + ChartEditorTimeScale.stepToPixels(effectiveStepTime);
+              state.gridGhostHoldNote.updateHoldNoteGraphic();
+            }
+            else
+            {
+              state.gridGhostHoldNote.setHeightDirectly(0);
+              state.gridGhostHoldNote.noteData = null;
+              state.gridGhostHoldNote.overrideData = null;
+              state.gridGhostHoldNote.visible = false;
+            }
+          }
+
+          state.noteDisplayDirty = true;
+          return;
+        }
+
         // Player is clicking and holding on a selected note or event to move the selection around.
         targetCursorMode = Grabbing;
 

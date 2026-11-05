@@ -3748,6 +3748,15 @@ class ChartEditorState extends UIState // UIState derives from MusicBeatState
     #end
   }
 
+  function releasingControl():Bool
+  {
+    #if mac
+    return FlxG.keys.justReleased.WINDOWS;
+    #else
+    return FlxG.keys.justReleased.CONTROL;
+    #end
+  }
+
   /**
    * Apply every volume slider in the Preferences toolbox to the audio, and update their labels.
    */
